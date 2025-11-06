@@ -59,7 +59,7 @@ function safeJsonParse(text: string): any {
 }
 
 /* ========== GENERATE COOKING CHALLENGE ========== */
-export async function generateChallenge(region: string): Promise<Challenge> {
+export async function generateGeminiChallenge(region: string): Promise<Challenge> {
   const apiKey = getNextApiKey();
   const prompt = `Generate a short Indian vegan cooking challenge for region: ${region}.
 Keep the description under 50 words.
