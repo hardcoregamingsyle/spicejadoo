@@ -1,18 +1,21 @@
+// types.ts
 
 export enum Flavor {
-  HEAT = 'Heat',
-  EARTHY = 'Earthy',
-  SWEET = 'Sweet',
-  TANGY = 'Tangy',
-  AROMATIC = 'Aromatic',
+  Heat = "Heat",
+  Sweetness = "Sweetness",
+  Sourness = "Sourness",
+  Umami = "Umami",
+  Bitterness = "Bitterness",
+  Aromatic = "Aromatic",
 }
 
 export interface FlavorProfile {
-  [Flavor.HEAT]: number;
-  [Flavor.EARTHY]: number;
-  [Flavor.SWEET]: number;
-  [Flavor.TANGY]: number;
-  [Flavor.AROMATIC]: number;
+  Heat: number;
+  Sweetness: number;
+  Sourness: number;
+  Umami: number;
+  Bitterness: number;
+  Aromatic: number;
 }
 
 export interface Spice {
