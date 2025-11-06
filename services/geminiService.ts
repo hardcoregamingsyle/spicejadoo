@@ -337,81 +337,80 @@ let globalAudioCtx: AudioContext | null = null;
 export async function textToSpeech(text: string) {
   if (!text?.trim()) return;
 
-  console.log("🎤 [TTS] Generating audio with Gemini 2.5 Flash TTS...");
+  console.log("🎤 [Gemini TTS] Generating speech using Gemini 2.5 Flash TTS...");
 
   for (let attempt = 0; attempt < GEMINI_API_KEYS.length; attempt++) {
     const apiKey = getCurrentKey();
 
     try {
-      const body = {
-        contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: {
-          responseMimeType: "audio/mpeg",
-          audioConfig: {
-            voice: "en-IN-Neural2-B",
-            speakingRate: 1.25,
-            pitch: -1.5,
-          },
-        },
-      };
-
-      const resp = await callGemini(
-        "models/gemini-2.5-flash-tts:generateContent",
-        body,
-        apiKey
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [{ text }],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: "audio/mp3",
+              audioConfig: {
+                voice: "en-IN-Neural2-B", // nice Indian accent voice
+                speakingRate: 1.2,
+              },
+            },
+          }),
+        }
       );
 
+      if (resp.status === 429) {
+        console.warn("🚫 Rate limit hit. Rotating key...");
+        rotateKeyPersist();
+        continue;
+      }
+
       if (!resp.ok) {
-        if (resp.status === 429) {
-          console.warn("TTS key limit hit, rotating...");
-          rotateKeyPersist();
-          continue;
-        }
         console.error("❌ Gemini TTS request failed:", resp.status, await resp.text());
         rotateKeyPersist();
         continue;
       }
 
       const json = await resp.json();
-      console.log("✅ Gemini TTS response received:", json);
+      console.log("✅ Gemini TTS response:", json);
 
       const base64Audio =
         json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ||
-        json?.candidates?.[0]?.content?.parts?.[0]?.audio?.data ||
-        null;
+        json?.candidates?.[0]?.content?.parts?.[0]?.audio?.data;
 
       if (!base64Audio) {
         console.error("⚠️ No audio data in TTS response.");
-        break;
+        continue;
       }
 
-      // 🧠 Initialize audio context if not done
-      if (!globalAudioCtx) {
-        globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-
+      // Decode & play
       const audioBytes = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));
-      const buffer = await globalAudioCtx.decodeAudioData(audioBytes.buffer);
+      const blob = new Blob([audioBytes], { type: "audio/mp3" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.play().catch((e) => console.warn("🎧 Audio play failed:", e));
 
-      const source = globalAudioCtx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(globalAudioCtx.destination);
-      source.start(0);
-
-      console.log("🔊 Playing Gemini-generated TTS audio...");
+      console.log("🔊 Playing Gemini-generated speech...");
       return;
     } catch (err) {
-      console.error("TTS exception:", err);
+      console.error("💥 TTS call error:", err);
       rotateKeyPersist();
     }
   }
 
   // Fallback
-  console.warn("Falling back to browser speech synthesis...");
+  console.warn("Fallback to browser TTS...");
   try {
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-IN";
-    utter.rate = 1.25;
+    utter.rate = 1.1;
     utter.pitch = 1.0;
     speechSynthesis.speak(utter);
   } catch (err) {
