@@ -40,57 +40,52 @@ function rotateKey() {
 }
 
 // --- Cloud TTS (uses same Google API key) ---
+// --- Gemini Native TTS (uses same GoogleGenAI keys) ---
 async function speakText(text: string) {
-  for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
-    try {
-      const apiKey = API_KEYS[currentKeyIndex];
-      const aiWithKey = new GoogleGenAI({ apiKey });
-      
-      // Call Gemini model variant for TTS
-      const response = await aiWithKey.models.generateContent({
-        model: "gemini-2.5-pro-preview-tts",  // or whichever TTS model you choose
-        contents: text,
-        config: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: "en-IN-Wavenet-D", // or a voice available in Gemini TTS
-              }
-            }
-          }
-        }
-      });
-      
-      // The response includes audio data
-      const audioData = response.candidates[0].content.parts[0].inline_data.data; // base64 or binary
-      // decode & play audio (similar to your Blob logic)
-      const audioBytes = atob(audioData);
-      const buffer = new Uint8Array(audioBytes.length);
-      for (let i = 0; i < audioBytes.length; i++) {
-        buffer[i] = audioBytes.charCodeAt(i);
-      }
-      const blob = new Blob([buffer], { type: "audio/mp3" });
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.play();
-      return;
-    } catch (err: any) {
-      if (err.message?.includes("quota") || err.message?.includes("429") || err.message?.includes("limit")) {
-        rotateKey();
-        continue;
-      }
-      console.error("TTS error with Gemini:", err);
-      break;
-    }
-  }
+  try {
+    const ai = new GoogleGenAI({ apiKey: currentApiKey() });
 
-  // fallback to browser voice
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 1.25;
-  utter.pitch = 0.9;
-  utter.lang = "en-IN";
-  speechSynthesis.speak(utter);
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-pro-preview-tts",
+      contents: text,
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "en-IN-Neural2-C", // Indian accent; try others like en-IN-Neural2-D
+            },
+          },
+          speakingRate: 1.25, // faster
+          pitch: -0.5,
+        },
+      },
+    });
+
+    // extract base64 audio data
+    const audioData =
+      response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!audioData) throw new Error("No audio data in Gemini response");
+
+    // convert base64 → blob → play
+    const byteString = atob(audioData);
+    const buffer = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) {
+      buffer[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([buffer], { type: "audio/mp3" });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play();
+  } catch (error) {
+    console.warn("🎙 Gemini TTS failed, using fallback:", error);
+    // fallback browser TTS
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "en-IN";
+    utter.rate = 1.25;
+    utter.pitch = 0.9;
+    speechSynthesis.speak(utter);
+  }
 }
 
     const data = await ttsResponse.json();
