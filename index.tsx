@@ -30,6 +30,23 @@ function unlockAudio() {
 window.addEventListener("click", unlockAudio);
 window.addEventListener("touchstart", unlockAudio);
 
+(function setupAudioUnlock() {
+  let unlocked = false;
+  async function unlock() {
+    if (unlocked) return;
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === "suspended") await ctx.resume();
+      try { ctx.close?.(); } catch {}
+      unlocked = true;
+      console.log("🔓 Audio unlocked");
+    } catch {}
+  }
+  window.addEventListener("click", unlock, { once: true });
+  window.addEventListener("touchstart", unlock, { once: true });
+})();
+
+
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
