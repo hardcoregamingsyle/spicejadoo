@@ -3,7 +3,8 @@ import { GameScreen } from './GameScreen';
 import { RegionSelector } from './RegionSelector';
 import { Loader } from './Loader';
 import { Challenge } from '../types';
-import { generateGeminiChallenge } from '../services/geminiService';
+import { generateGeminiResponse } from '../services/geminiService';
+
 
 // Fix: Import the Button component to resolve reference errors.
 import { Button } from './ui/Button';
