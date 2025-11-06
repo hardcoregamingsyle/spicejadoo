@@ -86,5 +86,6 @@ export const Game: React.FC = () => {
             <main style={{ marginTop: 18 }}>
                 {renderGameState()}
             </main>
-        </>
-    );
+    </>
+  );
+}
