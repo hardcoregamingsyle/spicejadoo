@@ -93,3 +93,29 @@ export async function generateGeminiResponse(prompt: string): Promise<string> {
 
   return "All Gemini API keys exhausted or unavailable.";
 }
+
+export async function generateGeminiChallenge() {
+  const prompt = `
+  You are an AI chef creating a short and fun cooking challenge for the player.
+  Respond in **one short paragraph** describing the dish and the twist.
+  Keep it creative, Indian-themed, and under 50 words.
+  `;
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${getNextApiKey()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }]
+      }),
+    });
+
+    const data = await res.json();
+    const output = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Chef’s hat fell off! Try again!";
+    return output;
+  } catch (error) {
+    console.error("Error generating Gemini challenge:", error);
+    return "The kitchen spirits are silent... try again!";
+  }
+}
+
