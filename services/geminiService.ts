@@ -106,7 +106,7 @@ async function speakText(text: string) {
 
     const audio = new Audio(url);
     audio.play();
-  } catch (error) {
+    catch (error) {
     console.warn("🎙 Cloud TTS failed, using fallback voice:", error);
     // fallback to browser voice
     try {
