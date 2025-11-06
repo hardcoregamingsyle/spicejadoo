@@ -1,12 +1,19 @@
-/* Full Gemini 2.5 Flash + TTS service with multi-key rotation and persistent index.
-   Drop this file into /services/geminiService.ts
-   Works fully client-side on Cloudflare Pages.
-*/
+/* =====================================================================
+   Gemini 2.5 Flash (Google AI Studio) Integration
+   - Multi-API-key rotation
+   - Short, concise responses
+   - No Cloud TTS
+   ===================================================================== */
 
 import { Type } from "@google/genai";
-import { SelectedSpice, OracleJudgement, Challenge, Flavor } from "../types";
+import {
+  SelectedSpice,
+  OracleJudgement,
+  Challenge,
+  Flavor,
+} from "../types";
 
-/* ======================== CONFIG ======================== */
+/* ======================== CONFIG: Add your keys ======================== */
 const GEMINI_API_KEYS = [
   "AIzaSyDX3UPwaM11izKZyevMMzggJ6l0ug1MhLo",
   "AIzaSyBoz8WhcxsU-i239Oz3Syx0MshAhuTTNfI",
@@ -22,21 +29,27 @@ const GEMINI_API_KEYS = [
   "AIzaSyAu7b7qTB8UK_s6zV4DeE2bbYr0ACxyHbs",
   "AIzaSyBabAY1FFEWcNMs0p4KE_lQb4jo1ttq2CM",
   "AIzaSyCS6BelDTp-2z5ijR0ty9YAPggMR5ZTkaY",
-  // ... add as many as you want (20+ works fine)
 ];
+/* ====================================================================== */
 
+if (!GEMINI_API_KEYS || GEMINI_API_KEYS.length === 0) {
+  console.warn("⚠️ No Gemini API keys found in geminiService.ts!");
+}
+
+/* ==================== Persistent key index ==================== */
 const STORAGE_KEY = "spice_jadoo_gemini_key_index";
-/* ======================================================== */
 
 function loadKeyIndex(): number {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
     if (!v) return 0;
     const n = parseInt(v, 10);
-    if (Number.isFinite(n) && n >= 0) return n % GEMINI_API_KEYS.length;
-  } catch {}
-  return 0;
+    return Number.isFinite(n) && n >= 0 ? n % GEMINI_API_KEYS.length : 0;
+  } catch {
+    return 0;
+  }
 }
+
 function saveKeyIndex(i: number) {
   try {
     localStorage.setItem(STORAGE_KEY, String(i % GEMINI_API_KEYS.length));
@@ -44,10 +57,12 @@ function saveKeyIndex(i: number) {
 }
 
 let currentKeyIndex = loadKeyIndex();
+
 function getCurrentKey(): string {
   if (GEMINI_API_KEYS.length === 0) return "";
   return GEMINI_API_KEYS[currentKeyIndex % GEMINI_API_KEYS.length];
 }
+
 function rotateKeyPersist() {
   if (GEMINI_API_KEYS.length === 0) return;
   currentKeyIndex = (currentKeyIndex + 1) % GEMINI_API_KEYS.length;
@@ -55,120 +70,205 @@ function rotateKeyPersist() {
   console.warn(`🔁 Switched to Gemini API key #${currentKeyIndex + 1}`);
 }
 
-/* --------------------- REST caller --------------------- */
-async function callGemini(path: string, body: any, apiKey: string): Promise<Response> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/${path}`;
+/* ===================== Helper: call Gemini REST ===================== */
+async function callGemini(
+  pathSuffix: string,
+  body: any,
+  apiKey: string
+): Promise<Response> {
+  const url = `https://generativelanguage.googleapis.com/v1/${pathSuffix}`;
   return fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
     body: JSON.stringify(body),
   });
 }
 
-/* --------------------- Text generation --------------------- */
+/* ===================== Oracle / Challenge Schemas ===================== */
+const ORACLE_SYSTEM_INSTRUCTION = `You are 'The Oracle of Flavors,' an ancient, poetic connoisseur of Indian cuisine. Respond concisely, with grandeur. Always 100% VEGAN.`;
+
+const judgeDishSchema = {
+  type: Type.OBJECT,
+  properties: {
+    dishName: { type: Type.STRING },
+    description: { type: Type.STRING },
+    score: { type: Type.NUMBER },
+    feedback: { type: Type.STRING },
+  },
+  required: ["dishName", "description", "score", "feedback"],
+};
+
+const generateChallengeSchema = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    description: { type: Type.STRING },
+    base: { type: Type.STRING },
+    targetProfile: {
+      type: Type.OBJECT,
+      properties: {
+        [Flavor.HEAT]: { type: Type.INTEGER },
+        [Flavor.EARTHY]: { type: Type.INTEGER },
+        [Flavor.SWEET]: { type: Type.INTEGER },
+        [Flavor.TANGY]: { type: Type.INTEGER },
+        [Flavor.AROMATIC]: { type: Type.INTEGER },
+      },
+      required: Object.values(Flavor),
+    },
+  },
+  required: ["title", "description", "base", "targetProfile"],
+};
+
+/* ===================== Core Gemini text generator ===================== */
 export async function generateAIResponse(prompt: string): Promise<string> {
   if (!prompt) return "";
-  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
+
+  const finalPrompt = `${prompt}\n\nPlease respond briefly — one concise paragraph (under 60 words).`;
+
+  for (let attempt = 0; attempt < GEMINI_API_KEYS.length; attempt++) {
     const apiKey = getCurrentKey();
     try {
-      const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-      const resp = await callGemini("models/gemini-2.5-flash:generateContent", body, apiKey);
+      const body = {
+        contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
+        generationConfig: {
+          temperature: 0.9,
+          topP: 0.9,
+          maxOutputTokens: 100,
+        },
+      };
+
+      const resp = await callGemini(
+        "models/gemini-2.5-flash:generateContent",
+        body,
+        apiKey
+      );
 
       if (resp.ok) {
         const json = await resp.json();
-        const txt =
+        const text =
           json?.candidates?.[0]?.content?.parts?.[0]?.text ??
           json?.candidates?.[0]?.content?.parts?.[0]?.markdown ??
           "";
-        return String(txt);
+        return String(text).trim();
       }
 
-      if (resp.status === 429) rotateKeyPersist();
-      else rotateKeyPersist();
-    } catch {
+      if (resp.status === 429) {
+        console.warn("Gemini: rate limit hit — rotating key");
+        rotateKeyPersist();
+        continue;
+      }
+
+      const errText = await resp.text().catch(() => "");
+      console.error("Gemini text error:", resp.status, errText);
+      rotateKeyPersist();
+    } catch (err) {
+      console.error("Gemini exception:", err);
       rotateKeyPersist();
     }
   }
+
   throw new Error("All Gemini API keys failed for text generation.");
 }
 
-/* --------------------- Oracle judgement --------------------- */
+/* ===================== Oracle Judgement ===================== */
 export const getJudgementFromOracle = async (
   challenge: Challenge,
   spices: SelectedSpice[]
 ): Promise<OracleJudgement> => {
   const spiceList = spices.map((s) => `- ${s.name}: ${s.quantity} part(s)`).join("\n");
-  const prompt = `A new vegan culinary creation arrives. Concept: '${challenge.title} - ${challenge.description}'. Base: '${challenge.base}'. Spices:\n${spiceList}\n\nProvide your divine judgment as JSON (dishName, description, score, feedback).`;
+  const prompt = `A vegan culinary creation arrives. Concept: '${challenge.title} - ${challenge.description}'. Base: '${challenge.base}'. Spices:\n${spiceList}\n\nProvide divine judgment as JSON (dishName, description, score, feedback). Keep it short.`;
 
-  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
+  for (let attempt = 0; attempt < GEMINI_API_KEYS.length; attempt++) {
     const apiKey = getCurrentKey();
     try {
-      const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-      const resp = await callGemini("models/gemini-2.5-flash:generateContent", body, apiKey);
+      const body = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 150 },
+      };
+
+      const resp = await callGemini(
+        "models/gemini-2.5-flash:generateContent",
+        body,
+        apiKey
+      );
 
       if (resp.ok) {
         const json = await resp.json();
-        const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
         try {
-          const parsed = JSON.parse(raw.trim());
-
-          // 🔊 Speak the result
-          try {
-            const speech = `${parsed.description}. ${parsed.feedback}`;
-            await textToSpeech(speech);
-          } catch (e) {
-            console.warn("TTS failed:", e);
-          }
-
-          return parsed as OracleJudgement;
-        } catch {}
+          return JSON.parse(rawText.trim()) as OracleJudgement;
+        } catch {
+          const maybeJson = rawText.substring(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
+          return JSON.parse(maybeJson) as OracleJudgement;
+        }
       }
-      if (resp.status === 429) rotateKeyPersist();
-      else rotateKeyPersist();
-    } catch {
+
+      if (resp.status === 429) {
+        rotateKeyPersist();
+        continue;
+      }
+
+      const errText = await resp.text().catch(() => "");
+      console.error("Oracle text error:", resp.status, errText);
+      rotateKeyPersist();
+    } catch (err) {
+      console.error("Oracle exception:", err);
       rotateKeyPersist();
     }
   }
 
   return {
     dishName: "The Muddled Concoction",
-    description:
-      "The ether was disturbed, and the Oracle could not get a clear vision of your dish.",
+    description: "Fallback: Oracle could not interpret your creation.",
     score: 2.1,
-    feedback: "An error occurred while consulting the Oracle. Please try again later.",
+    feedback: "An error occurred. Please try again later.",
   };
 };
 
-/* --------------------- Challenge generator --------------------- */
+/* ===================== Challenge Generator ===================== */
 export const generateChallenge = async (region: string): Promise<Challenge> => {
-  const prompt = `Generate a new, unique, 100% VEGAN cooking challenge from ${region} India. Provide a JSON object with: title, description, base, targetProfile (heat, earthy, sweet, tangy, aromatic).`;
+  const prompt = `Generate a new 100% VEGAN cooking challenge from ${region} India. Reply as JSON: title, description, base, and targetProfile (heat, earthy, sweet, tangy, aromatic). Keep description short.`;
 
-  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
+  for (let attempt = 0; attempt < GEMINI_API_KEYS.length; attempt++) {
     const apiKey = getCurrentKey();
     try {
-      const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-      const resp = await callGemini("models/gemini-2.5-flash:generateContent", body, apiKey);
+      const body = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 150 },
+      };
+
+      const resp = await callGemini(
+        "models/gemini-2.5-flash:generateContent",
+        body,
+        apiKey
+      );
 
       if (resp.ok) {
         const json = await resp.json();
-        const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
         try {
-          const parsed = JSON.parse(raw.trim());
-
-          // 🔊 Speak the new challenge
-          try {
-            const speech = `Your challenge: ${parsed.title}. ${parsed.description}`;
-            await textToSpeech(speech);
-          } catch (e) {
-            console.warn("TTS failed:", e);
-          }
-
+          const parsed = JSON.parse(rawText.trim());
           return { ...parsed, id: Date.now(), region } as Challenge;
-        } catch {}
+        } catch {
+          const maybeJson = rawText.substring(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
+          const parsed2 = JSON.parse(maybeJson);
+          return { ...parsed2, id: Date.now(), region } as Challenge;
+        }
       }
-      if (resp.status === 429) rotateKeyPersist();
-      else rotateKeyPersist();
-    } catch {
+
+      if (resp.status === 429) {
+        rotateKeyPersist();
+        continue;
+      }
+
+      const errText = await resp.text().catch(() => "");
+      console.error("Challenge error:", resp.status, errText);
+      rotateKeyPersist();
+    } catch (err) {
+      console.error("Challenge exception:", err);
       rotateKeyPersist();
     }
   }
@@ -188,66 +288,3 @@ export const generateChallenge = async (region: string): Promise<Challenge> => {
     },
   };
 };
-
-/* --------------------- Gemini-native TTS --------------------- */
-export async function textToSpeech(text: string) {
-  if (!text?.trim()) return;
-  console.log("🎤 TTS requested:", text);
-
-  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
-    const apiKey = getCurrentKey();
-    try {
-      const body = {
-        contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: {
-          responseMimeType: "audio/mp3",
-          voice: "en-IN",       // Indian English accent
-          speakingRate: 1.25,
-          pitch: -1.0,
-        },
-      };
-
-      const resp = await callGemini(
-        "models/gemini-2.5-flash-tts:generateContent",
-        body,
-        apiKey
-      );
-
-      if (resp.ok) {
-        const json = await resp.json();
-        const audioBase64 =
-          json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ??
-          json?.candidates?.[0]?.content?.parts?.[0]?.audio ??
-          null;
-
-        if (audioBase64) {
-          const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
-          await audio.play().catch((e) => console.warn("Audio play error:", e));
-          console.log("✅ Played TTS audio");
-          return;
-        } else {
-          console.warn("No audio returned from Gemini TTS");
-        }
-      } else {
-        if (resp.status === 429) rotateKeyPersist();
-        else rotateKeyPersist();
-      }
-    } catch (err) {
-      console.error("TTS exception:", err);
-      rotateKeyPersist();
-    }
-  }
-
-  // Browser fallback
-  try {
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-IN";
-    u.rate = 1.25;
-    u.pitch = 0.9;
-    const voices = speechSynthesis.getVoices();
-    u.voice = voices.find((v) => v.lang.toLowerCase().includes("en-in")) || voices[0] || null;
-    speechSynthesis.speak(u);
-  } catch (err) {
-    console.warn("Browser TTS fallback failed:", err);
-  }
-}
