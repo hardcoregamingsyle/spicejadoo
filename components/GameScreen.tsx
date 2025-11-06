@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { SPICES, EMPTY_PROFILE } from '../constants';
 import { Challenge, SelectedSpice, OracleJudgement, FlavorProfile, Flavor } from '../types';
-import { getJudgementFromOracle } from '../services/geminiService';
+import { generateGeminiResponse } from '../services/geminiService';
+
 
 import { SpiceRack } from './SpiceRack';
 import { Cauldron } from './Cauldron';
@@ -76,7 +77,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ challenge, onNextChallen
   const handleSubmitToOracle = async () => {
     if (selectedSpices.length === 0) return;
     setIsConsultingOracle(true);
-    const judgement = await getJudgementFromOracle(challenge, selectedSpices);
+    const judgement = await generteGeminiResponse(challenge, selectedSpices);
     setOracleJudgement(judgement);
     if (judgement.score === 10) {
       setShowCelebration(true);
