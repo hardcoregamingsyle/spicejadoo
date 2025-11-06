@@ -3,7 +3,8 @@ import { GameScreen } from './GameScreen';
 import { RegionSelector } from './RegionSelector';
 import { Loader } from './Loader';
 import { Challenge } from '../types';
-import { generateChallenge } from '../services/geminiService';
+import { generateGeminiChallenge } from '../services/geminiService';
+
 // Fix: Import the Button component to resolve reference errors.
 import { Button } from './ui/Button';
 
@@ -17,7 +18,7 @@ export const Game: React.FC = () => {
     const fetchNewChallenge = useCallback(async (region: string) => {
         setGameState('generating_challenge');
         try {
-            const challenge = await generateChallenge(region);
+            const challenge = await generateGeminiChallenge(region);
             setCurrentChallenge(challenge);
             setGameState('playing');
         } catch (e) {
