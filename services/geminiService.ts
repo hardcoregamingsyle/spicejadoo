@@ -69,11 +69,11 @@ Return only JSON like this:
   "description": "string",
   "base": "main ingredient",
   "targetProfile": {
-    "Heat": number (0-100),
-    "Earthy": number (0-100),
-    "Sweet": number (0-100),
-    "Tangy": number (0-100),
-    "Aromatic": number (0-100)
+    "Heat": number (0-1000),
+    "Earthy": number (0-1000),
+    "Sweet": number (0-1000),
+    "Tangy": number (0-1000),
+    "Aromatic": number (0-10000)
   }
 }`;
 
