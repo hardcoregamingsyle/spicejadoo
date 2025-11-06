@@ -13,11 +13,21 @@ import {
 
 /* ======================== CONFIG: Put your keys here ======================== */
 const GEMINI_API_KEYS = [
-  /* Replace these placeholders with your real keys (as many as you want) */
-  "YOUR_KEY_1",
-  "YOUR_KEY_2",
-  "YOUR_KEY_3",
-  // ... add more
+  /* Replace these placeholders with your real keys (as many as you want) */ 
+  "AIzaSyDX3UPwaM11izKZyevMMzggJ6l0ug1MhLo",
+  "AIzaSyBoz8WhcxsU-i239Oz3Syx0MshAhuTTNfI",
+  "AIzaSyBHbPU7FYxN_4i-3MGZ7cCQgIAPPRzJqq4",
+  "AIzaSyDrrM9MTkFjs7BChVkU4SxyZnf1Xu5Xhhs",
+  "AIzaSyANGG0wzP0ITzPhqsxrdLl_lUMnYYipp1c",
+  "AIzaSyD3TipoUWjPPoPPYBMDtqI2u3gpkL4rjAY",
+  "AIzaSyB1hONrY0VZGR7GnqiObwV5o2Sbj5KEABc",
+  "AIzaSyBwzVuPWWQnFu8YHdywXdhRFNSzwHne3FU",
+  "AIzaSyBdCYps0Q2RdhQNC3uZ0By_OhmG6n-ojAI",
+  "AIzaSyAi9t0GQT3xG3BGeea0dcdPc5WhvV5u1HY",
+  "AIzaSyA_3Hm5RNM18wwGOq0yYNIxzl4gt_Xjbaw",
+  "AIzaSyAu7b7qTB8UK_s6zV4DeE2bbYr0ACxyHbs",
+  "AIzaSyBabAY1FFEWcNMs0p4KE_lQb4jo1ttq2CM",
+  "AIzaSyCS6BelDTp-2z5ijR0ty9YAPggMR5ZTkaY",
 ];
 /* ========================================================================== */
 
