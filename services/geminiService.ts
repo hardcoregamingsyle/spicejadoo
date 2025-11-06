@@ -1,10 +1,10 @@
 // services/geminiService.ts
-// --- Google Gemini AI Service with Persistent API Key Rotation + TTS ---
+// --- Google Gemini + Cloud TTS Integration with Multi-Key Rotation and Memory ---
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { SelectedSpice, OracleJudgement, Challenge, Flavor } from "../types";
 
-// 🧠 Step 1: Manage unlimited keys (stored persistently in browser)
+// 🧠 Store unlimited keys here
 const API_KEYS = [
   "AIzaSyDX3UPwaM11izKZyevMMzggJ6l0ug1MhLo",
   "AIzaSyBoz8WhcxsU-i239Oz3Syx0MshAhuTTNfI",
@@ -20,18 +20,18 @@ const API_KEYS = [
   "AIzaSyAu7b7qTB8UK_s6zV4DeE2bbYr0ACxyHbs",
   "AIzaSyBabAY1FFEWcNMs0p4KE_lQb4jo1ttq2CM",
   "AIzaSyCS6BelDTp-2z5ijR0ty9YAPggMR5ZTkaY",
-  
-  // ... add as many as you wantAIzaSyD3TipoUWjPPoPPYBMDtqI2u3gpkL4rjAY];
-]
-// Retrieve last used index from localStorage, fallback to 0
+  // ... add as many as you like
+];
+
+// Retrieve last used key index from localStorage
 let currentKeyIndex =
   parseInt(localStorage.getItem("currentKeyIndex") || "0", 10) %
   API_KEYS.length;
 
-// Create AI client
+// Initialize Gemini client
 let ai = new GoogleGenAI({ apiKey: API_KEYS[currentKeyIndex] });
 
-// Rotate keys on quota/rate limit errors
+// Rotate key if one hits rate limit
 function rotateKey() {
   currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
   localStorage.setItem("currentKeyIndex", currentKeyIndex.toString());
@@ -39,25 +39,59 @@ function rotateKey() {
   ai = new GoogleGenAI({ apiKey: API_KEYS[currentKeyIndex] });
 }
 
-// --- TTS: Convert Oracle text to speech (client-side Web Speech API) ---
-function speakText(text: string) {
+// --- Cloud TTS (uses same Google API key) ---
+async function speakText(text: string) {
   try {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-IN";
-    utterance.rate = 0.95;
-    utterance.pitch = 1;
-    utterance.voice =
-      speechSynthesis
-        .getVoices()
-        .find((v) => v.lang.startsWith("en-IN")) ||
-      speechSynthesis.getVoices()[0];
-    speechSynthesis.speak(utterance);
-  } catch (e) {
-    console.warn("TTS unavailable:", e);
+    const apiKey = API_KEYS[currentKeyIndex];
+    const ttsResponse = await fetch(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: { text },
+          voice: {
+            languageCode: "en-IN",
+            name: "en-IN-Wavenet-D", // Male Indian English voice
+          },
+          audioConfig: {
+            audioEncoding: "MP3",
+            speakingRate: 1.25, // faster speech
+            pitch: -0.5, // deeper “Oracle” tone
+          },
+        }),
+      }
+    );
+
+    const data = await ttsResponse.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.audioContent) throw new Error("TTS returned no audio");
+
+    // Decode and play MP3
+    const audioBytes = atob(data.audioContent);
+    const buffer = new Uint8Array(audioBytes.length);
+    for (let i = 0; i < audioBytes.length; i++) buffer[i] = audioBytes.charCodeAt(i);
+    const blob = new Blob([buffer], { type: "audio/mp3" });
+    const url = URL.createObjectURL(blob);
+
+    const audio = new Audio(url);
+    audio.play();
+  } catch (error) {
+    console.warn("🎙 Cloud TTS failed, using fallback voice:", error);
+    // fallback to browser voice
+    try {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1.25;
+      utter.pitch = 0.9;
+      utter.lang = "en-IN";
+      speechSynthesis.speak(utter);
+    } catch (err) {
+      console.error("TTS Fallback failed:", err);
+    }
   }
 }
 
-// --- Oracle AI Logic ---
+// --- Core Oracle Logic ---
 
 const ORACLE_SYSTEM_INSTRUCTION =
   "You are 'The Oracle of Flavors,' an ancient, wise, and poetic connoisseur of Indian cuisine. You speak with grandeur and authority. Your purpose is to judge CULINARY CREATIONS submitted to you, which are ALWAYS 100% VEGAN. Always respond with a JSON object that matches the provided schema.";
@@ -65,10 +99,10 @@ const ORACLE_SYSTEM_INSTRUCTION =
 const judgeDishSchema = {
   type: Type.OBJECT,
   properties: {
-    dishName: { type: Type.STRING, description: "A creative, evocative name for the dish." },
-    description: { type: Type.STRING, description: "A poetic description of the dish's flavor." },
-    score: { type: Type.NUMBER, description: "A numerical score out of 10 (e.g., 8.5)." },
-    feedback: { type: Type.STRING, description: "Constructive feedback on spice balance." },
+    dishName: { type: Type.STRING },
+    description: { type: Type.STRING },
+    score: { type: Type.NUMBER },
+    feedback: { type: Type.STRING },
   },
   required: ["dishName", "description", "score", "feedback"],
 };
@@ -76,9 +110,9 @@ const judgeDishSchema = {
 const generateChallengeSchema = {
   type: Type.OBJECT,
   properties: {
-    title: { type: Type.STRING, description: "Authentic vegan dish name." },
-    description: { type: Type.STRING, description: "Creative challenge scenario." },
-    base: { type: Type.STRING, description: "Primary vegan base ingredients." },
+    title: { type: Type.STRING },
+    description: { type: Type.STRING },
+    base: { type: Type.STRING },
     targetProfile: {
       type: Type.OBJECT,
       properties: {
@@ -94,14 +128,13 @@ const generateChallengeSchema = {
   required: ["title", "description", "base", "targetProfile"],
 };
 
-// --- Oracle Functions ---
-
+// --- Oracle’s Judgement ---
 export const getJudgementFromOracle = async (
   challenge: Challenge,
   spices: SelectedSpice[]
 ): Promise<OracleJudgement> => {
   const spiceList = spices.map((s) => `- ${s.name}: ${s.quantity} part(s)`).join("\n");
-  const prompt = `A new vegan culinary creation has been brought before you. The dish is based on the concept: '${challenge.title} - ${challenge.description}'. The base ingredients are: '${challenge.base}'. The creator has used the following divine spices:\n${spiceList}\n\nProvide your divine judgment.`; 
+  const prompt = `A new vegan culinary creation has been brought before you. The dish is based on '${challenge.title} - ${challenge.description}'. The base ingredients are: '${challenge.base}'. The creator has used:\n${spiceList}\n\nGive your divine judgment.`;
 
   for (let i = 0; i < API_KEYS.length; i++) {
     try {
@@ -116,8 +149,8 @@ export const getJudgementFromOracle = async (
       });
 
       const result = JSON.parse(response.text.trim());
-      // 🎙 Speak the Oracle’s poetic feedback
-      speakText(result.description + " " + result.feedback);
+      // 🎙 Speak Oracle’s poetic output
+      speakText(`${result.description}. ${result.feedback}`);
       return result;
     } catch (error: any) {
       if (
@@ -132,6 +165,7 @@ export const getJudgementFromOracle = async (
     }
   }
 
+  // fallback response
   return {
     dishName: "The Muddled Concoction",
     description:
@@ -142,10 +176,10 @@ export const getJudgementFromOracle = async (
   };
 };
 
-export const generateChallenge = async (
-  region: string
-): Promise<Challenge> => {
-  const prompt = `Generate a unique vegan cooking challenge from ${region} India.`;
+// --- Generate Culinary Challenge ---
+export const generateChallenge = async (region: string): Promise<Challenge> => {
+  const prompt = `Generate a unique, vegan cooking challenge from ${region} India.`;
+
   for (let i = 0; i < API_KEYS.length; i++) {
     try {
       const response = await ai.models.generateContent({
@@ -153,7 +187,7 @@ export const generateChallenge = async (
         contents: prompt,
         config: {
           systemInstruction:
-            "You are a creative game designer specializing in vegan Indian cuisine challenges. Respond in JSON only.",
+            "You are a creative game designer specializing in vegan Indian cuisine. Respond in JSON only.",
           responseMimeType: "application/json",
           responseSchema: generateChallengeSchema,
         },
