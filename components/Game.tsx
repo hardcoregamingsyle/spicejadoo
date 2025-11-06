@@ -19,7 +19,7 @@ export const Game: React.FC = () => {
     const fetchNewChallenge = useCallback(async (region: string) => {
         setGameState('generating_challenge');
         try {
-            const challenge = await generateGeminiChallenge(region);
+            const challenge = await generateGeminiResponse(region);
             setCurrentChallenge(challenge);
             setGameState('playing');
         } catch (e) {
