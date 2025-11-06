@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spice Jadoo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+      
+      :root {
+        --color-bg: #F9F9F7;
+        --color-surface: #ffffff;
+        --color-primary: #F59E0B; /* Amber 500 */
+        --color-primary-dark: #D97706; /* Amber 600 */
+        
+        --color-text-header: #1F2937; /* Gray 800 */
+        --color-text-body: #4B5563; /* Gray 600 */
+        --color-text-muted: #9CA3AF; /* Gray 400 */
+        --color-text-on-primary: #ffffff;
+
+        --color-border: #F3F4F6; /* Gray 100 */
+        --color-border-dashed: #D1D5DB; /* Gray 300 */
+      }
+
+      body {
+        font-family: 'Poppins', sans-serif;
+        background-color: var(--color-bg);
+        color: var(--color-text-body);
+        overflow-x: hidden;
+      }
+      
+      .font-header {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+        color: var(--color-text-header);
+      }
+
+      /* Animations */
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in { animation: fadeIn 0.5s ease-in-out forwards; }
+      .animate-fade-in-slow { animation: fadeIn 0.8s ease-in-out forwards; }
+
+      @keyframes reveal {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      .animate-modal-reveal { animation: reveal 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+
+
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      
+      /* Celebration Animations */
+      @keyframes confetti-fall {
+        0% { transform: translateY(-10vh) rotateZ(0deg); opacity: 1; }
+        100% { transform: translateY(110vh) rotateZ(720deg); opacity: 0; }
+      }
+      
+      .confetti {
+        position: absolute;
+        width: 10px;
+        height: 20px;
+        opacity: 0;
+        animation: confetti-fall 3s linear forwards;
+      }
+      
+      @keyframes celebrate-text {
+        0%, 100% { transform: scale(0.95); opacity: 0; }
+        10%, 90% { transform: scale(1.1); opacity: 1; }
+        20%, 80% { transform: scale(1); opacity: 1; }
+      }
+      
+      .animate-celebrate-text {
+        animation: celebrate-text 4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+      }
+      
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

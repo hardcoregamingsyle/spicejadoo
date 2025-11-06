@@ -1,0 +1,12 @@
+# Wrangler configuration for Cloudflare Pages (Vite + React project)
+name = "spice-jadoo:-an-indian-cooking-game"
+type = "javascript"
+compatibility_date = "2025-11-06"
+# account_id = ""
+
+[build]
+command = "vite build"
+
+[site]
+bucket = "dist"
+entry-point = "workers"  # If you add Cloudflare Pages Functions, place them here
