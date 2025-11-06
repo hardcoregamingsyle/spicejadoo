@@ -2,7 +2,8 @@
 // Complete working code for Gemini 2.5 Flash with key rotation and safe error handling
 
 // 🧩 1️⃣ Your Google AI Studio API keys here
-const API_KEYS = [
+// --- Multi-API key rotation ---
+const GEMINI_API_KEYS = [
   "AIzaSyDX3UPwaM11izKZyevMMzggJ6l0ug1MhLo",
   "AIzaSyBoz8WhcxsU-i239Oz3Syx0MshAhuTTNfI",
   "AIzaSyBHbPU7FYxN_4i-3MGZ7cCQgIAPPRzJqq4",
@@ -17,7 +18,16 @@ const API_KEYS = [
   "AIzaSyAu7b7qTB8UK_s6zV4DeE2bbYr0ACxyHbs",
   "AIzaSyBabAY1FFEWcNMs0p4KE_lQb4jo1ttq2CM",
   "AIzaSyCS6BelDTp-2z5ijR0ty9YAPggMR5ZTkaY",
+  // ...add more keys here
 ];
+
+let currentKeyIndex = 0;
+export function getNextApiKey() {
+  const key = GEMINI_API_KEYS[currentKeyIndex];
+  currentKeyIndex = (currentKeyIndex + 1) % GEMINI_API_KEYS.length;
+  return key;
+}
+
 
 // 🧩 2️⃣ Model + Endpoint
 const GEMINI_MODEL = "models/gemini-2.5-flash";
