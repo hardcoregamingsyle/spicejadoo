@@ -74,7 +74,7 @@ function rotateKeyPersist() {
 /* ====================== Helper: call Gemini REST ====================== */
 /**
  * Generic call to Gemini REST generateContent endpoint.
- * - pathSuffix: model and method e.g. "models/gemini-1.5-flash:generateContent"
+ * - pathSuffix: model and method e.g. "models/gemini-2.5-flash:generateContent"
  * - body: JSON body for the API call
  * - apiKey: x-goog-api-key header to use
  */
@@ -147,7 +147,7 @@ export async function generateAIResponse(prompt: string): Promise<string> {
 
       // model endpoint (text)
       const resp = await callGemini(
-        "models/gemini-1.5-flash:generateContent",
+        "models/gemini-2.5-flash:generateContent",
         body,
         apiKey
       );
@@ -200,7 +200,7 @@ export const getJudgementFromOracle = async (
       };
 
       const resp = await callGemini(
-        "models/gemini-1.5-flash:generateContent",
+        "models/gemini-2.5-flash:generateContent",
         body,
         apiKey
       );
@@ -263,7 +263,7 @@ export const generateChallenge = async (region: string): Promise<Challenge> => {
       };
 
       const resp = await callGemini(
-        "models/gemini-1.5-flash:generateContent",
+        "models/gemini-2.5-flash:generateContent",
         body,
         apiKey
       );
@@ -345,7 +345,7 @@ export async function textToSpeech(text: string) {
 
       // Use model endpoint that supports audio generation
       const resp = await callGemini(
-        "models/gemini-1.5-flash:generateContent",
+        "models/gemini-2.5-flash:generateContent",
         body,
         apiKey
       );
