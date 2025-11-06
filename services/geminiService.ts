@@ -1,19 +1,13 @@
-// services/geminiService.ts
-/* Full, self-contained Gemini text + TTS service with multi-key rotation and persistence.
-   Works client-side (Cloudflare Pages). Replace the GEMINI_API_KEYS array with your keys.
+/* Full Gemini 2.5 Flash + TTS service with multi-key rotation and persistent index.
+   Drop this file into /services/geminiService.ts
+   Works fully client-side on Cloudflare Pages.
 */
 
 import { Type } from "@google/genai";
-import {
-  SelectedSpice,
-  OracleJudgement,
-  Challenge,
-  Flavor,
-} from "../types";
+import { SelectedSpice, OracleJudgement, Challenge, Flavor } from "../types";
 
-/* ======================== CONFIG: Put your keys here ======================== */
+/* ======================== CONFIG ======================== */
 const GEMINI_API_KEYS = [
-  /* Replace these placeholders with your real keys (as many as you want) */ 
   "AIzaSyDX3UPwaM11izKZyevMMzggJ6l0ug1MhLo",
   "AIzaSyBoz8WhcxsU-i239Oz3Syx0MshAhuTTNfI",
   "AIzaSyBHbPU7FYxN_4i-3MGZ7cCQgIAPPRzJqq4",
@@ -28,18 +22,11 @@ const GEMINI_API_KEYS = [
   "AIzaSyAu7b7qTB8UK_s6zV4DeE2bbYr0ACxyHbs",
   "AIzaSyBabAY1FFEWcNMs0p4KE_lQb4jo1ttq2CM",
   "AIzaSyCS6BelDTp-2z5ijR0ty9YAPggMR5ZTkaY",
+  // ... add as many as you want (20+ works fine)
 ];
-/* ========================================================================== */
 
-/* Safety check */
-if (!GEMINI_API_KEYS || GEMINI_API_KEYS.length === 0) {
-  console.warn(
-    "No Gemini API keys found in services/geminiService.ts. Add keys to GEMINI_API_KEYS."
-  );
-}
-
-/* ========== Persistent key index (stored in localStorage) ========== */
 const STORAGE_KEY = "spice_jadoo_gemini_key_index";
+/* ======================================================== */
 
 function loadKeyIndex(): number {
   try {
@@ -47,12 +34,9 @@ function loadKeyIndex(): number {
     if (!v) return 0;
     const n = parseInt(v, 10);
     if (Number.isFinite(n) && n >= 0) return n % GEMINI_API_KEYS.length;
-    return 0;
-  } catch {
-    return 0;
-  }
+  } catch {}
+  return 0;
 }
-
 function saveKeyIndex(i: number) {
   try {
     localStorage.setItem(STORAGE_KEY, String(i % GEMINI_API_KEYS.length));
@@ -71,117 +55,44 @@ function rotateKeyPersist() {
   console.warn(`🔁 Switched to Gemini API key #${currentKeyIndex + 1}`);
 }
 
-/* ====================== Helper: call Gemini REST ====================== */
-/**
- * Generic call to Gemini REST generateContent endpoint.
- * - pathSuffix: model and method e.g. "models/gemini-2.5-flash:generateContent"
- * - body: JSON body for the API call
- * - apiKey: x-goog-api-key header to use
- */
-async function callGemini(
-  pathSuffix: string,
-  body: any,
-  apiKey: string
-): Promise<Response> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/${pathSuffix}`;
+/* --------------------- REST caller --------------------- */
+async function callGemini(path: string, body: any, apiKey: string): Promise<Response> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/${path}`;
   return fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(body),
   });
 }
 
-/* ====================== Schemas & prompts ====================== */
-const ORACLE_SYSTEM_INSTRUCTION = `You are 'The Oracle of Flavors,' an ancient, wise, and poetic connoisseur of Indian cuisine. You speak with grandeur and authority. Your purpose is to judge CULINARY CREATIONS submitted to you, which are ALWAYS 100% VEGAN. Always respond with a JSON object that matches the provided schema.`;
-
-const judgeDishSchema = {
-  type: Type.OBJECT,
-  properties: {
-    dishName: { type: Type.STRING, description: "Name for the dish." },
-    description: { type: Type.STRING, description: "Poetic description." },
-    score: { type: Type.NUMBER, description: "Score out of 10." },
-    feedback: { type: Type.STRING, description: "Constructive feedback." },
-  },
-  required: ["dishName", "description", "score", "feedback"],
-};
-
-const generateChallengeSchema = {
-  type: Type.OBJECT,
-  properties: {
-    title: { type: Type.STRING },
-    description: { type: Type.STRING },
-    base: { type: Type.STRING },
-    targetProfile: {
-      type: Type.OBJECT,
-      properties: {
-        [Flavor.HEAT]: { type: Type.INTEGER },
-        [Flavor.EARTHY]: { type: Type.INTEGER },
-        [Flavor.SWEET]: { type: Type.INTEGER },
-        [Flavor.TANGY]: { type: Type.INTEGER },
-        [Flavor.AROMATIC]: { type: Type.INTEGER },
-      },
-      required: Object.values(Flavor),
-    },
-  },
-  required: ["title", "description", "base", "targetProfile"],
-};
-
-/* ====================== Text generation helper ====================== */
-/**
- * Generate text using Gemini text model (returns string).
- * Rotates keys automatically on quota/429 errors.
- */
+/* --------------------- Text generation --------------------- */
 export async function generateAIResponse(prompt: string): Promise<string> {
   if (!prompt) return "";
-
-  // We'll attempt each key until success or all fail
-  for (let attempt = 0; attempt < Math.max(1, GEMINI_API_KEYS.length); attempt++) {
+  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
     const apiKey = getCurrentKey();
     try {
-      const body = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-      };
-
-      // model endpoint (text)
-      const resp = await callGemini(
-        "models/gemini-2.5-flash:generateContent",
-        body,
-        apiKey
-      );
+      const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+      const resp = await callGemini("models/gemini-2.5-flash:generateContent", body, apiKey);
 
       if (resp.ok) {
         const json = await resp.json();
-        const text =
+        const txt =
           json?.candidates?.[0]?.content?.parts?.[0]?.text ??
           json?.candidates?.[0]?.content?.parts?.[0]?.markdown ??
           "";
-        return String(text);
+        return String(txt);
       }
 
-      // Handle rate limit -> rotate and retry
-      if (resp.status === 429) {
-        console.warn("Gemini text: key hit limit (429), rotating key");
-        rotateKeyPersist();
-        continue;
-      }
-
-      // Other non-ok -> try next key
-      const errText = await resp.text().catch(() => "");
-      console.error("Gemini text error:", resp.status, errText);
-      rotateKeyPersist();
-    } catch (err) {
-      console.error("Gemini text exception:", err);
+      if (resp.status === 429) rotateKeyPersist();
+      else rotateKeyPersist();
+    } catch {
       rotateKeyPersist();
     }
   }
-
   throw new Error("All Gemini API keys failed for text generation.");
 }
 
-/* ====================== Oracle: getJudgementFromOracle ====================== */
+/* --------------------- Oracle judgement --------------------- */
 export const getJudgementFromOracle = async (
   challenge: Challenge,
   spices: SelectedSpice[]
@@ -189,119 +100,79 @@ export const getJudgementFromOracle = async (
   const spiceList = spices.map((s) => `- ${s.name}: ${s.quantity} part(s)`).join("\n");
   const prompt = `A new vegan culinary creation arrives. Concept: '${challenge.title} - ${challenge.description}'. Base: '${challenge.base}'. Spices:\n${spiceList}\n\nProvide your divine judgment as JSON (dishName, description, score, feedback).`;
 
-  // Try rotating keys until success
-  for (let attempt = 0; attempt < Math.max(1, GEMINI_API_KEYS.length); attempt++) {
+  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
     const apiKey = getCurrentKey();
     try {
-      const body = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        // We request JSON but Gemini may not enforce schema; using responseMimeType is not standard in REST,
-        // so we rely on model to return JSON-like text. (SDK-based schema enforcement isn't used here.)
-      };
-
-      const resp = await callGemini(
-        "models/gemini-2.5-flash:generateContent",
-        body,
-        apiKey
-      );
+      const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+      const resp = await callGemini("models/gemini-2.5-flash:generateContent", body, apiKey);
 
       if (resp.ok) {
         const json = await resp.json();
-        const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-        // Try to parse JSON from rawText
+        const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
         try {
-          const parsed = JSON.parse(rawText.trim());
-          return parsed as OracleJudgement;
-        } catch (parseErr) {
-          // If parsing fails, attempt to extract JSON substring
-          const maybeJson = rawText.substring(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
+          const parsed = JSON.parse(raw.trim());
+
+          // 🔊 Speak the result
           try {
-            const parsed2 = JSON.parse(maybeJson);
-            return parsed2 as OracleJudgement;
-          } catch {
-            console.warn("Oracle: could not parse JSON from model output, returning fallback");
-            break; // go to fallback below
+            const speech = `${parsed.description}. ${parsed.feedback}`;
+            await textToSpeech(speech);
+          } catch (e) {
+            console.warn("TTS failed:", e);
           }
-        }
-      }
 
-      if (resp.status === 429) {
-        console.warn("Oracle: key hit limit (429), rotating");
-        rotateKeyPersist();
-        continue;
+          return parsed as OracleJudgement;
+        } catch {}
       }
-
-      const errText = await resp.text().catch(() => "");
-      console.error("Oracle text error:", resp.status, errText);
-      rotateKeyPersist();
-    } catch (err) {
-      console.error("Oracle exception:", err);
+      if (resp.status === 429) rotateKeyPersist();
+      else rotateKeyPersist();
+    } catch {
       rotateKeyPersist();
     }
   }
 
-  // Fallback judgement
   return {
     dishName: "The Muddled Concoction",
     description:
       "The ether was disturbed, and the Oracle could not get a clear vision of your dish.",
     score: 2.1,
-    feedback:
-      "An error occurred while consulting the Oracle. Please try again later.",
+    feedback: "An error occurred while consulting the Oracle. Please try again later.",
   };
 };
 
-/* ====================== Challenge generator ====================== */
+/* --------------------- Challenge generator --------------------- */
 export const generateChallenge = async (region: string): Promise<Challenge> => {
   const prompt = `Generate a new, unique, 100% VEGAN cooking challenge from ${region} India. Provide a JSON object with: title, description, base, targetProfile (heat, earthy, sweet, tangy, aromatic).`;
 
-  for (let attempt = 0; attempt < Math.max(1, GEMINI_API_KEYS.length); attempt++) {
+  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
     const apiKey = getCurrentKey();
     try {
-      const body = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-      };
-
-      const resp = await callGemini(
-        "models/gemini-2.5-flash:generateContent",
-        body,
-        apiKey
-      );
+      const body = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+      const resp = await callGemini("models/gemini-2.5-flash:generateContent", body, apiKey);
 
       if (resp.ok) {
         const json = await resp.json();
-        const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
         try {
-          const parsed = JSON.parse(rawText.trim());
-          return { ...parsed, id: Date.now(), region } as Challenge;
-        } catch {
-          const maybeJson = rawText.substring(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
+          const parsed = JSON.parse(raw.trim());
+
+          // 🔊 Speak the new challenge
           try {
-            const parsed2 = JSON.parse(maybeJson);
-            return { ...parsed2, id: Date.now(), region } as Challenge;
-          } catch {
-            console.warn("Challenge: parsing failed, trying next key");
-            rotateKeyPersist();
-            continue;
+            const speech = `Your challenge: ${parsed.title}. ${parsed.description}`;
+            await textToSpeech(speech);
+          } catch (e) {
+            console.warn("TTS failed:", e);
           }
-        }
-      }
 
-      if (resp.status === 429) {
-        rotateKeyPersist();
-        continue;
+          return { ...parsed, id: Date.now(), region } as Challenge;
+        } catch {}
       }
-
-      const errText = await resp.text().catch(() => "");
-      console.error("Challenge generation error:", resp.status, errText);
-      rotateKeyPersist();
-    } catch (err) {
-      console.error("Challenge exception:", err);
+      if (resp.status === 429) rotateKeyPersist();
+      else rotateKeyPersist();
+    } catch {
       rotateKeyPersist();
     }
   }
 
-  // fallback
   return {
     id: Date.now(),
     region,
@@ -318,102 +189,65 @@ export const generateChallenge = async (region: string): Promise<Challenge> => {
   };
 };
 
-/* ====================== Gemini-native TTS ====================== */
-/**
- * Use Gemini model that can return audio. We call the same generateContent endpoint
- * but request audio by setting responseMimeType -> audio/mp3 via generationConfig.
- *
- * Note: Gemini REST output shape for audio may vary; we attempt the common structures:
- * data.candidates[0].content.parts[0].inlineData.data (base64)
- */
-/* ====================== Gemini-native TTS (Gemini 2.5 Flash TTS) ====================== */
-/**
- * Uses Gemini 2.5 Flash TTS to convert text into MP3 audio.
- * Automatically rotates keys if one hits a limit.
- */
-// At the top of the file, reuse the same context
-let globalAudioCtx: AudioContext | null = null;
-
+/* --------------------- Gemini-native TTS --------------------- */
 export async function textToSpeech(text: string) {
   if (!text?.trim()) return;
+  console.log("🎤 TTS requested:", text);
 
-  console.log("🎤 [Gemini TTS] Generating speech using Gemini 2.5 Flash TTS...");
-
-  for (let attempt = 0; attempt < GEMINI_API_KEYS.length; attempt++) {
+  for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
     const apiKey = getCurrentKey();
-
     try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [{ text }],
-              },
-            ],
-            generationConfig: {
-              responseMimeType: "audio/mp3",
-              audioConfig: {
-                voice: "en-IN-Neural2-B", // nice Indian accent voice
-                speakingRate: 1.2,
-              },
-            },
-          }),
-        }
+      const body = {
+        contents: [{ role: "user", parts: [{ text }] }],
+        generationConfig: {
+          responseMimeType: "audio/mp3",
+          voice: "en-IN",       // Indian English accent
+          speakingRate: 1.25,
+          pitch: -1.0,
+        },
+      };
+
+      const resp = await callGemini(
+        "models/gemini-2.5-flash-tts:generateContent",
+        body,
+        apiKey
       );
 
-      if (resp.status === 429) {
-        console.warn("🚫 Rate limit hit. Rotating key...");
-        rotateKeyPersist();
-        continue;
+      if (resp.ok) {
+        const json = await resp.json();
+        const audioBase64 =
+          json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ??
+          json?.candidates?.[0]?.content?.parts?.[0]?.audio ??
+          null;
+
+        if (audioBase64) {
+          const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+          await audio.play().catch((e) => console.warn("Audio play error:", e));
+          console.log("✅ Played TTS audio");
+          return;
+        } else {
+          console.warn("No audio returned from Gemini TTS");
+        }
+      } else {
+        if (resp.status === 429) rotateKeyPersist();
+        else rotateKeyPersist();
       }
-
-      if (!resp.ok) {
-        console.error("❌ Gemini TTS request failed:", resp.status, await resp.text());
-        rotateKeyPersist();
-        continue;
-      }
-
-      const json = await resp.json();
-      console.log("✅ Gemini TTS response:", json);
-
-      const base64Audio =
-        json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ||
-        json?.candidates?.[0]?.content?.parts?.[0]?.audio?.data;
-
-      if (!base64Audio) {
-        console.error("⚠️ No audio data in TTS response.");
-        continue;
-      }
-
-      // Decode & play
-      const audioBytes = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));
-      const blob = new Blob([audioBytes], { type: "audio/mp3" });
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.play().catch((e) => console.warn("🎧 Audio play failed:", e));
-
-      console.log("🔊 Playing Gemini-generated speech...");
-      return;
     } catch (err) {
-      console.error("💥 TTS call error:", err);
+      console.error("TTS exception:", err);
       rotateKeyPersist();
     }
   }
 
-  // Fallback
-  console.warn("Fallback to browser TTS...");
+  // Browser fallback
   try {
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "en-IN";
-    utter.rate = 1.1;
-    utter.pitch = 1.0;
-    speechSynthesis.speak(utter);
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-IN";
+    u.rate = 1.25;
+    u.pitch = 0.9;
+    const voices = speechSynthesis.getVoices();
+    u.voice = voices.find((v) => v.lang.toLowerCase().includes("en-in")) || voices[0] || null;
+    speechSynthesis.speak(u);
   } catch (err) {
-    console.error("Browser TTS fallback failed:", err);
+    console.warn("Browser TTS fallback failed:", err);
   }
 }
