@@ -1,0 +1,144 @@
+/* src/styles/ui.css
+   New global UI styles: pastel background, cards, header, buttons, tiles, responsive.
+*/
+
+:root {
+  --bg-from: #fffaf2;
+  --bg-to:   #f6faf0;
+  --muted:   #6b7280;
+  --accent:  #f59e0b;
+  --accent-2:#f97316;
+  --card-bg: #ffffff;
+  --radius-lg: 18px;
+  --radius-md: 12px;
+}
+
+/* Base */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: linear-gradient(135deg, var(--bg-from), var(--bg-to));
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* App wrapper */
+.app-wrap {
+  max-width: 1360px;
+  margin: 28px auto;
+  padding: 18px;
+}
+
+/* Header */
+.app-header {
+  display:flex;
+  align-items:center;
+  gap:14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.8));
+  padding: 12px 18px;
+  border-radius: calc(var(--radius-lg) + 4px);
+  box-shadow: 0 8px 30px rgba(15,23,42,0.06);
+  border: 1px solid rgba(203,213,225,0.6);
+}
+.app-title { display:flex; align-items:center; gap:12px; font-weight:700; font-size:18px; }
+.logo { font-size:26px; transform:translateY(-1px); }
+.app-actions { margin-left:auto; display:flex; gap:10px; align-items:center; }
+
+/* Layout grid */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+  margin-top: 18px;
+  align-items: start;
+}
+@media (max-width: 980px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+
+/* Panels */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: 0 6px 24px rgba(16,24,40,0.06);
+  border: 1px solid rgba(229,231,235,0.6);
+}
+
+/* Play panel (left) */
+.play-panel {
+  min-height: 620px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+/* Droppable / cauldron area */
+.play-drop {
+  flex:1;
+  border-radius: 12px;
+  border: 2px dashed rgba(250,204,21,0.14);
+  background: linear-gradient(180deg, rgba(255,250,240,0.6), rgba(255,255,255,0.4));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:36px;
+  text-align:center;
+}
+.play-drop .spark { font-size:30px; }
+.play-drop h2 { margin:0; font-size:18px; font-weight:600; color:#111827; }
+.play-drop p { margin:0; color:var(--muted); font-size:13px; }
+
+/* Ingredient tile */
+.ingredients-grid {
+  display:grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap:10px;
+  margin-top:12px;
+}
+.ingredient {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px;
+  border-radius:12px;
+  background: linear-gradient(180deg, rgba(250,250,250,0.9), rgba(255,255,255,0.95));
+  border: 1px solid rgba(243,244,246,0.9);
+  box-shadow: 0 6px 14px rgba(15,23,42,0.03);
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.ingredient:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(15,23,42,0.06); }
+.ingredient .emoji { font-size:22px; width:34px; text-align:center; }
+.ingredient .name { font-size:14px; font-weight:600; color:#111827; }
+
+/* Buttons */
+.btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.btn.ghost { background: transparent; border: 1px solid rgba(15,23,42,0.06); color:#111827; }
+.btn.primary { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: white; box-shadow: 0 8px 30px rgba(249,115,22,0.12); }
+
+/* Discovery box */
+.discovery {
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,250,250,0.9));
+  border: 1px solid rgba(229,231,235,0.6);
+  font-size:13px;
+  color:var(--muted);
+}
+
+/* Small utilities */
+.small-muted { color: var(--muted); font-size:13px; }
