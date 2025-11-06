@@ -326,6 +326,11 @@ export const generateChallenge = async (region: string): Promise<Challenge> => {
  * Note: Gemini REST output shape for audio may vary; we attempt the common structures:
  * data.candidates[0].content.parts[0].inlineData.data (base64)
  */
+/* ====================== Gemini-native TTS (Gemini 2.5 Flash TTS) ====================== */
+/**
+ * Uses Gemini 2.5 Flash TTS to convert text into MP3 audio.
+ * Automatically rotates keys if one hits a limit.
+ */
 export async function textToSpeech(text: string) {
   if (!text || text.trim() === "") return;
 
@@ -334,46 +339,51 @@ export async function textToSpeech(text: string) {
     const apiKey = getCurrentKey();
     try {
       const body = {
-        contents: [{ role: "user", parts: [{ text }] }],
+        contents: [
+          {
+            role: "user",
+            parts: [{ text }],
+          },
+        ],
         generationConfig: {
-          responseMimeType: "audio/mp3",
-          // voice hint (gemini may or may not respect)
-          voice: "en-IN",
-          speakingRate: 1.25,
+          // This triggers audio output
+          responseMimeType: "audio/mpeg",
+          // Optional voice parameters (Gemini TTS supports natural Indian English voices)
+          audioConfig: {
+            voice: "en-IN-Neural2-A",
+            speakingRate: 1.25,
+            pitch: -2.0,
+          },
         },
       };
 
-      // Use model endpoint that supports audio generation
+      // ✅ Use Gemini 2.5 Flash TTS model
       const resp = await callGemini(
-        "models/gemini-2.5-flash:generateContent",
+        "models/gemini-2.5-flash-tts:generateContent",
         body,
         apiKey
       );
 
       if (resp.ok) {
         const json = await resp.json();
-        // Common path: candidates[0].content.parts[0].inlineData.data
+        // Gemini TTS usually returns inlineData.data (base64 encoded MP3)
         const audioBase64 =
-          json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ??
-          json?.candidates?.[0]?.content?.parts?.[0]?.audio ??
+          json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ||
+          json?.candidates?.[0]?.content?.parts?.[0]?.audio ||
           null;
 
-        if (!audioBase64) {
-          // Not returned as expected — try alternate places
-          console.warn("TTS: no base64 audio found in Gemini response; falling back to browser TTS");
+        if (audioBase64) {
+          const audio = new Audio(`data:audio/mpeg;base64,${audioBase64}`);
+          await audio.play().catch((e) => console.warn("Audio playback error:", e));
+          return;
+        } else {
+          console.warn("⚠️ No audio data in Gemini TTS response, falling back to browser voice.");
           break;
         }
-
-        // Play base64 audio
-        const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
-        await audio.play().catch((e) => {
-          console.warn("Audio.play() error:", e);
-        });
-        return;
       }
 
       if (resp.status === 429) {
-        console.warn("TTS: key hit limit (429) — rotating");
+        console.warn("TTS: key hit limit (429), rotating...");
         rotateKeyPersist();
         continue;
       }
@@ -387,16 +397,17 @@ export async function textToSpeech(text: string) {
     }
   }
 
-  // Final fallback: browser speech synthesis
+  // 🔁 Fallback to browser speech if Gemini fails
   try {
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-IN";
     utter.rate = 1.25;
     utter.pitch = 0.9;
-    // Prefer en-IN voice if available
     const voices = speechSynthesis.getVoices();
     utter.voice =
-      voices.find((v) => v.lang.toLowerCase().includes("en-in")) || voices[0] || null;
+      voices.find((v) => v.lang.toLowerCase().includes("en-in")) ||
+      voices.find((v) => v.lang.toLowerCase().includes("en")) ||
+      null;
     speechSynthesis.speak(utter);
   } catch (err) {
     console.warn("Browser TTS fallback failed:", err);
