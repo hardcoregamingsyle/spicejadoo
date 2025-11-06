@@ -77,7 +77,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ challenge, onNextChallen
   const handleSubmitToOracle = async () => {
     if (selectedSpices.length === 0) return;
     setIsConsultingOracle(true);
-    const judgement = await generteGeminiResponse(challenge, selectedSpices);
+    const judgement = await generateGeminiResponse(challenge, selectedSpices);
     setOracleJudgement(judgement);
     if (judgement.score === 10) {
       setShowCelebration(true);
