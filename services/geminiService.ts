@@ -1,10 +1,12 @@
-// services/geminiService.ts
-// --- Google Gemini + Cloud TTS Integration with Multi-Key Rotation and Memory ---
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { SelectedSpice, OracleJudgement, Challenge, Flavor } from "../types";
+import {
+  SelectedSpice,
+  OracleJudgement,
+  Challenge,
+  Flavor,
+} from "../types";
 
-// 🧠 Store unlimited keys here
+// ======== 🔐 MULTI-API KEY SETUP =========
 const API_KEYS = [
   "AIzaSyDX3UPwaM11izKZyevMMzggJ6l0ug1MhLo",
   "AIzaSyBoz8WhcxsU-i239Oz3Syx0MshAhuTTNfI",
@@ -20,106 +22,26 @@ const API_KEYS = [
   "AIzaSyAu7b7qTB8UK_s6zV4DeE2bbYr0ACxyHbs",
   "AIzaSyBabAY1FFEWcNMs0p4KE_lQb4jo1ttq2CM",
   "AIzaSyCS6BelDTp-2z5ijR0ty9YAPggMR5ZTkaY",
-  // ... add as many as you like
+  // ...add up to 20+ keys here
 ];
 
-// Retrieve last used key index from localStorage
-let currentKeyIndex =
-  parseInt(localStorage.getItem("currentKeyIndex") || "0", 10) %
-  API_KEYS.length;
+let currentKeyIndex = 0;
+function currentApiKey() {
+  return API_KEYS[currentKeyIndex];
+}
 
-// Initialize Gemini client
-let ai = new GoogleGenAI({ apiKey: API_KEYS[currentKeyIndex] });
-
-// Rotate key if one hits rate limit
 function rotateKey() {
   currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
-  localStorage.setItem("currentKeyIndex", currentKeyIndex.toString());
-  console.warn(`🔁 Switched to API key #${currentKeyIndex + 1}`);
-  ai = new GoogleGenAI({ apiKey: API_KEYS[currentKeyIndex] });
+  console.warn(`⚠️ Switched to API key #${currentKeyIndex + 1}`);
 }
 
-// --- Cloud TTS (uses same Google API key) ---
-// --- Gemini Native TTS (uses same GoogleGenAI keys) ---
-async function speakText(text: string) {
-  try {
-    const ai = new GoogleGenAI({ apiKey: currentApiKey() });
+// ========================================
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro-preview-tts",
-      contents: text,
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: "en-IN-Neural2-C", // Indian accent; try others like en-IN-Neural2-D
-            },
-          },
-          speakingRate: 1.25, // faster
-          pitch: -0.5,
-        },
-      },
-    });
-
-    // extract base64 audio data
-    const audioData =
-      response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!audioData) throw new Error("No audio data in Gemini response");
-
-    // convert base64 → blob → play
-    const byteString = atob(audioData);
-    const buffer = new Uint8Array(byteString.length);
-    for (let i = 0; i < byteString.length; i++) {
-      buffer[i] = byteString.charCodeAt(i);
-    }
-    const blob = new Blob([buffer], { type: "audio/mp3" });
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.play();
-  } catch (error) {
-    console.warn("🎙 Gemini TTS failed, using fallback:", error);
-    // fallback browser TTS
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "en-IN";
-    utter.rate = 1.25;
-    utter.pitch = 0.9;
-    speechSynthesis.speak(utter);
-  }
-}
-
-    const data = await ttsResponse.json();
-    if (data.error) throw new Error(data.error.message);
-    if (!data.audioContent) throw new Error("TTS returned no audio");
-
-    // Decode and play MP3
-    const audioBytes = atob(data.audioContent);
-    const buffer = new Uint8Array(audioBytes.length);
-    for (let i = 0; i < audioBytes.length; i++) buffer[i] = audioBytes.charCodeAt(i);
-    const blob = new Blob([buffer], { type: "audio/mp3" });
-    const url = URL.createObjectURL(blob);
-
-    const audio = new Audio(url);
-    audio.play();
-    catch (error) {
-    console.warn("🎙 Cloud TTS failed, using fallback voice:", error);
-    // fallback to browser voice
-    try {
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 1.25;
-      utter.pitch = 0.9;
-      utter.lang = "en-IN";
-      speechSynthesis.speak(utter);
-    } catch (err) {
-      console.error("TTS Fallback failed:", err);
-    }
-  }
-}
-
-// --- Core Oracle Logic ---
-
-const ORACLE_SYSTEM_INSTRUCTION =
-  "You are 'The Oracle of Flavors,' an ancient, wise, and poetic connoisseur of Indian cuisine. You speak with grandeur and authority. Your purpose is to judge CULINARY CREATIONS submitted to you, which are ALWAYS 100% VEGAN. Always respond with a JSON object that matches the provided schema.";
+const ORACLE_SYSTEM_INSTRUCTION = `
+You are 'The Oracle of Flavors,' an ancient, wise, and poetic connoisseur of Indian cuisine.
+You speak with grandeur and authority. Your purpose is to judge CULINARY CREATIONS submitted to you,
+which are ALWAYS 100% VEGAN. Always respond with a JSON object that matches the provided schema.
+`;
 
 const judgeDishSchema = {
   type: Type.OBJECT,
@@ -153,16 +75,20 @@ const generateChallengeSchema = {
   required: ["title", "description", "base", "targetProfile"],
 };
 
-// --- Oracle’s Judgement ---
+// ====== 🧠 ORACLE FUNCTION ======
 export const getJudgementFromOracle = async (
   challenge: Challenge,
   spices: SelectedSpice[]
 ): Promise<OracleJudgement> => {
-  const spiceList = spices.map((s) => `- ${s.name}: ${s.quantity} part(s)`).join("\n");
-  const prompt = `A new vegan culinary creation has been brought before you. The dish is based on '${challenge.title} - ${challenge.description}'. The base ingredients are: '${challenge.base}'. The creator has used:\n${spiceList}\n\nGive your divine judgment.`;
-
-  for (let i = 0; i < API_KEYS.length; i++) {
+  for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
     try {
+      const ai = new GoogleGenAI({ apiKey: currentApiKey() });
+      const spiceList = spices
+        .map((s) => `- ${s.name}: ${s.quantity} part(s)`)
+        .join("\n");
+
+      const prompt = `A new vegan culinary creation has been brought before you. The dish is based on the concept: '${challenge.title} - ${challenge.description}'. The base ingredients are: '${challenge.base}'. The creator has used the following divine spices:\n${spiceList}\n\nBased on this combination, please provide your divine judgment. Be creative, dramatic, and insightful. The dishName should be unique and sound legendary.`;
+
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,
@@ -174,9 +100,7 @@ export const getJudgementFromOracle = async (
       });
 
       const result = JSON.parse(response.text.trim());
-      // 🎙 Speak Oracle’s poetic output
-      speakText(`${result.description}. ${result.feedback}`);
-      return result;
+      return result as OracleJudgement;
     } catch (error: any) {
       if (
         error.message?.includes("quota") ||
@@ -190,37 +114,41 @@ export const getJudgementFromOracle = async (
     }
   }
 
-  // fallback response
   return {
     dishName: "The Muddled Concoction",
     description:
       "The ether was disturbed, and the Oracle could not get a clear vision of your dish.",
     score: 2.1,
-    feedback:
-      "An error occurred while consulting the Oracle. Perhaps the cosmic energies are not aligned.",
+    feedback: "Please try again later — the cosmic energies misaligned.",
   };
 };
 
-// --- Generate Culinary Challenge ---
-export const generateChallenge = async (region: string): Promise<Challenge> => {
-  const prompt = `Generate a unique, vegan cooking challenge from ${region} India.`;
-
-  for (let i = 0; i < API_KEYS.length; i++) {
+// ====== 🍛 CHALLENGE GENERATOR ======
+export const generateChallenge = async (
+  region: string
+): Promise<Challenge> => {
+  for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
     try {
+      const ai = new GoogleGenAI({ apiKey: currentApiKey() });
+      const prompt = `Generate a new, unique, and interesting cooking challenge based on a 100% VEGAN dish from ${region} India.`;
+
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           systemInstruction:
-            "You are a creative game designer specializing in vegan Indian cuisine. Respond in JSON only.",
+            "You are a creative game designer specializing in vegan Indian dishes. Always respond with valid JSON.",
           responseMimeType: "application/json",
           responseSchema: generateChallengeSchema,
         },
       });
 
       const result = JSON.parse(response.text.trim());
-      speakText(`Your new challenge is ${result.title}. ${result.description}`);
-      return { ...result, id: Date.now(), region };
+      return {
+        ...result,
+        id: Date.now(),
+        region: region,
+      } as Challenge;
     } catch (error: any) {
       if (
         error.message?.includes("quota") ||
@@ -234,13 +162,13 @@ export const generateChallenge = async (region: string): Promise<Challenge> => {
     }
   }
 
-  // fallback
+  // fallback challenge
   return {
-    id: Date.now(),
-    region,
+    id: 1,
+    region: "Fallback",
     title: "A Simple Lentil Dahl",
     description:
-      "Fallback challenge — the Oracle whispers: create a soothing and heartwarming dahl.",
+      "The API failed to respond, so let's make a classic comforting dish.",
     base: "lentils and water",
     targetProfile: {
       [Flavor.HEAT]: 15,
@@ -251,3 +179,65 @@ export const generateChallenge = async (region: string): Promise<Challenge> => {
     },
   };
 };
+
+// ====== 🗣 GEMINI TTS FUNCTION ======
+export async function speakText(text: string) {
+  for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: currentApiKey() });
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-pro-preview-tts",
+        contents: text,
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: "en-IN-Neural2-C",
+              },
+            },
+            speakingRate: 1.25,
+            pitch: -0.5,
+          },
+        },
+      });
+
+      const audioData =
+        response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!audioData) throw new Error("No audio data in Gemini response");
+
+      const byteString = atob(audioData);
+      const buffer = new Uint8Array(byteString.length);
+      for (let i = 0; i < byteString.length; i++) {
+        buffer[i] = byteString.charCodeAt(i);
+      }
+
+      const blob = new Blob([buffer], { type: "audio/mp3" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.play();
+
+      return; // stop after success
+    } catch (error: any) {
+      if (
+        error.message?.includes("quota") ||
+        error.message?.includes("429") ||
+        error.message?.includes("limit")
+      ) {
+        rotateKey();
+        continue;
+      }
+      console.warn("🎙 Gemini TTS failed, using fallback:", error);
+      break;
+    }
+  }
+
+  // browser fallback
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = "en-IN";
+  utter.rate = 1.25;
+  utter.pitch = 0.9;
+  speechSynthesis.speak(utter);
+}
+
