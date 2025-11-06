@@ -1,39 +1,24 @@
 import React from 'react';
 import { Game } from './components/Game';
+import './App.css';
 
 function App() {
   return (
-    <div className="app-wrap">
+    <div className="app-container">
       <header className="app-header">
-        <div className="app-title">
-          <span className="logo">🍛</span>
-          <div>
-            <div>Spice Jadoo</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Discover flavors by combining spices</div>
-          </div>
-        </div>
-
-        <div className="app-actions">
-          {/* Buttons in header keep their existing behavior defined inside Game component.
-              The header here is visual; the Game component duplicates its own header buttons,
-              but the visual header keeps an app-level presence. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 28 }}>🌶️</span>
+          <h1 style={{ fontSize: 22, margin: 0 }}>Spice Jadoo</h1>
         </div>
       </header>
 
-      <main className="main-grid" style={{ marginTop: 16 }}>
-        {/* Left column: Game will render inside the left panel container. */}
-        <div className="card play-panel">
-          <Game />
-        </div>
-
-        {/* Right column: leave placeholder — Game renders its own side panels if it already does. */}
-        <aside className="card" style={{ maxHeight: 'min-content' }}>
-          {/* If Game renders full layout already (it does), this card will appear empty — it's safe.
-              If you prefer the right-side panel to be controlled inside Game, remove this aside. */}
-          <div style={{ fontWeight: 700 }}>Ingredients</div>
-          <div className="small-muted" style={{ marginTop: 8 }}>Use the in-game interface to add spices.</div>
-        </aside>
+      <main style={{ padding: '20px' }}>
+        <Game />
       </main>
+
+      <footer style={{ textAlign: 'center', padding: '16px', fontSize: 13, color: 'gray' }}>
+        Crafted with ❤️ & spice | Flavor the world
+      </footer>
     </div>
   );
 }
