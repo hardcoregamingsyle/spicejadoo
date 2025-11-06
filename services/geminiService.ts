@@ -397,6 +397,93 @@ export async function textToSpeech(text: string) {
     }
   }
 
+/* ====================== Gemini-native TTS (Gemini 2.5 Flash TTS) ====================== */
+/**
+ * Uses Gemini 2.5 Flash TTS to convert text into MP3 audio.
+ * Automatically rotates keys if one hits a limit.
+ */
+export async function textToSpeech(text: string) {
+  if (!text || text.trim() === "") return;
+
+  // Try all keys
+  for (let attempt = 0; attempt < Math.max(1, GEMINI_API_KEYS.length); attempt++) {
+    const apiKey = getCurrentKey();
+    try {
+      const body = {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text }],
+          },
+        ],
+        generationConfig: {
+          // This triggers audio output
+          responseMimeType: "audio/mpeg",
+          // Optional voice parameters (Gemini TTS supports natural Indian English voices)
+          audioConfig: {
+            voice: "en-IN-Neural2-A",
+            speakingRate: 1.25,
+            pitch: -2.0,
+          },
+        },
+      };
+
+      // ✅ Use Gemini 2.5 Flash TTS model
+      const resp = await callGemini(
+        "models/gemini-2.5-flash-tts:generateContent",
+        body,
+        apiKey
+      );
+
+      if (resp.ok) {
+        const json = await resp.json();
+        // Gemini TTS usually returns inlineData.data (base64 encoded MP3)
+        const audioBase64 =
+          json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ||
+          json?.candidates?.[0]?.content?.parts?.[0]?.audio ||
+          null;
+
+        if (audioBase64) {
+          const audio = new Audio(`data:audio/mpeg;base64,${audioBase64}`);
+          await audio.play().catch((e) => console.warn("Audio playback error:", e));
+          return;
+        } else {
+          console.warn("⚠️ No audio data in Gemini TTS response, falling back to browser voice.");
+          break;
+        }
+      }
+
+      if (resp.status === 429) {
+        console.warn("TTS: key hit limit (429), rotating...");
+        rotateKeyPersist();
+        continue;
+      }
+
+      const errText = await resp.text().catch(() => "");
+      console.error("TTS error:", resp.status, errText);
+      rotateKeyPersist();
+    } catch (err) {
+      console.error("TTS exception:", err);
+      rotateKeyPersist();
+    }
+  }
+
+  // 🔁 Fallback to browser speech if Gemini fails
+  try {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "en-IN";
+    utter.rate = 1.25;
+    utter.pitch = 0.9;
+    const voices = speechSynthesis.getVoices();
+    utter.voice =
+      voices.find((v) => v.lang.toLowerCase().includes("en-in")) ||
+      voices.find((v) => v.lang.toLowerCase().includes("en")) ||
+      null;
+    speechSynthesis.speak(utter);
+  } catch (err) {
+    console.warn("Browser TTS fallback failed:", err);
+  }
+}
   // 🔁 Fallback to browser speech if Gemini fails
   try {
     const utter = new SpeechSynthesisUtterance(text);
