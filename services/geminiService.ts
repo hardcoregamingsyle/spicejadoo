@@ -1,9 +1,7 @@
-// src/services/geminiService.ts
+// services/geminiService.ts
 
-import { Flavor, Challenge, OracleJudgement, SelectedSpice } from "../types";
-
-/* ========== API KEY ROTATION ========== */
-const GEMINI_API_KEYS = [
+// ✅ Rotate through multiple API keys
+const API_KEYS = [
   "AIzaSyDX3UPwaM11izKZyevMMzggJ6l0ug1MhLo",
   "AIzaSyBoz8WhcxsU-i239Oz3Syx0MshAhuTTNfI",
   "AIzaSyBHbPU7FYxN_4i-3MGZ7cCQgIAPPRzJqq4",
@@ -20,105 +18,51 @@ const GEMINI_API_KEYS = [
   "AIzaSyCS6BelDTp-2z5ijR0ty9YAPggMR5ZTkaY",
 ];
 
-let currentKeyIndex = 0;
-export function getNextApiKey() {
-  const key = GEMINI_API_KEYS[currentKeyIndex];
-  currentKeyIndex = (currentKeyIndex + 1) % GEMINI_API_KEYS.length;
+let apiIndex = 0;
+
+function getNextApiKey() {
+  const key = API_KEYS[apiIndex];
+  apiIndex = (apiIndex + 1) % API_KEYS.length;
   return key;
 }
 
-/* ========== CALL GEMINI API ========== */
-async function callGemini(model: string, body: any, apiKey: string): Promise<any> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(body),
-  });
+// ✅ Short Gemini response generator (for flavor text or short challenge)
+export async function generateGeminiResponse(prompt: string): Promise<string> {
+  const apiKey = getNextApiKey();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Gemini error ${resp.status}: ${text}`);
-  }
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `${prompt}\n\nKeep it short — just a short paragraph, natural tone, not long.`,
+          },
+        ],
+      },
+    ],
+  };
 
-  return resp.json();
-}
-
-/* ========== SAFE JSON PARSER ========== */
-function safeJsonParse(text: string): any {
   try {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-  } catch (e) {
-    console.warn("Invalid JSON, fallback to text parse:", e);
-  }
-  return null;
-}
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-/* ========== GENERATE COOKING CHALLENGE ========== */
-export async function generateGeminiChallenge(region: string): Promise<Challenge> {
-  const apiKey = getNextApiKey();
-  const prompt = `Generate a short Indian vegan cooking challenge for region: ${region}.
-Keep the description under 50 words.
-Return only JSON like this:
-{
-  "title": "string",
-  "description": "string",
-  "base": "main ingredient",
-  "targetProfile": {
-    "Heat": number (0-1000),
-    "Earthy": number (0-1000),
-    "Sweet": number (0-1000),
-    "Tangy": number (0-1000),
-    "Aromatic": number (0-10000)
-  }
-}`;
-
-  const data = await callGemini("gemini-2.0-flash", { contents: [{ parts: [{ text: prompt }] }] }, apiKey);
-
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  const parsed = safeJsonParse(text);
-
-  return (
-    parsed || {
-      title: "Mystery Curry",
-      description: "A short flavorful curry challenge.",
-      base: "Potato",
-      targetProfile: { Heat: 50, Earthy: 40, Sweet: 20, Tangy: 30, Aromatic: 60 },
+    if (!res.ok) {
+      console.error("Gemini API error:", await res.text());
+      return "Sorry, I couldn't generate a response.";
     }
-  );
-}
 
-/* ========== ORACLE JUDGEMENT ========== */
-export async function generateOracleJudgement(
-  challenge: Challenge,
-  selectedSpices: SelectedSpice[]
-): Promise<OracleJudgement> {
-  const apiKey = getNextApiKey();
-
-  const prompt = `You are a culinary oracle.
-Given a cooking challenge and selected spices, rate how well they match.
-Return JSON:
-{
-  "score": number (0-100),
-  "comment": "short single-sentence feedback"
-}
-
-Challenge: ${JSON.stringify(challenge)}
-Selected Spices: ${JSON.stringify(selectedSpices)}`;
-
-  const data = await callGemini("gemini-2.0-flash", { contents: [{ parts: [{ text: prompt }] }] }, apiKey);
-
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  const parsed = safeJsonParse(text);
-
-  return (
-    parsed || {
-      score: 70,
-      comment: "A flavorful but slightly unbalanced combination.",
-    }
-  );
+    const data = await res.json();
+    return (
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "No response generated."
+    );
+  } catch (err) {
+    console.error("Error calling Gemini:", err);
+    return "Error generating response.";
+  }
 }
