@@ -331,12 +331,15 @@ export const generateChallenge = async (region: string): Promise<Challenge> => {
  * Uses Gemini 2.5 Flash TTS to convert text into MP3 audio.
  * Automatically rotates keys if one hits a limit.
  */
+// At the top of the file, reuse the same context
+let globalAudioCtx: AudioContext | null = null;
+
 export async function textToSpeech(text: string) {
-  if (!text || text.trim() === "") return;
+  if (!text?.trim()) return;
 
   console.log("🎤 [TTS] Generating audio with Gemini 2.5 Flash TTS...");
 
-  for (let attempt = 0; attempt < Math.max(1, GEMINI_API_KEYS.length); attempt++) {
+  for (let attempt = 0; attempt < GEMINI_API_KEYS.length; attempt++) {
     const apiKey = getCurrentKey();
 
     try {
@@ -360,7 +363,7 @@ export async function textToSpeech(text: string) {
 
       if (!resp.ok) {
         if (resp.status === 429) {
-          console.warn("TTS key hit limit, rotating...");
+          console.warn("TTS key limit hit, rotating...");
           rotateKeyPersist();
           continue;
         }
@@ -372,25 +375,27 @@ export async function textToSpeech(text: string) {
       const json = await resp.json();
       console.log("✅ Gemini TTS response received:", json);
 
-      // Try multiple possible response paths
       const base64Audio =
         json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data ||
         json?.candidates?.[0]?.content?.parts?.[0]?.audio?.data ||
-        json?.candidates?.[0]?.content?.parts?.[0]?.data ||
         null;
 
       if (!base64Audio) {
-        console.error("⚠️ No audio data in TTS response. Full response:", json);
+        console.error("⚠️ No audio data in TTS response.");
         break;
       }
 
-      // Decode and play reliably using Web Audio API
+      // 🧠 Initialize audio context if not done
+      if (!globalAudioCtx) {
+        globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
       const audioBytes = Uint8Array.from(atob(base64Audio), (c) => c.charCodeAt(0));
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const buffer = await audioCtx.decodeAudioData(audioBytes.buffer);
-      const source = audioCtx.createBufferSource();
+      const buffer = await globalAudioCtx.decodeAudioData(audioBytes.buffer);
+
+      const source = globalAudioCtx.createBufferSource();
       source.buffer = buffer;
-      source.connect(audioCtx.destination);
+      source.connect(globalAudioCtx.destination);
       source.start(0);
 
       console.log("🔊 Playing Gemini-generated TTS audio...");
@@ -401,7 +406,7 @@ export async function textToSpeech(text: string) {
     }
   }
 
-  // 🟡 Browser fallback
+  // Fallback
   console.warn("Falling back to browser speech synthesis...");
   try {
     const utter = new SpeechSynthesisUtterance(text);
