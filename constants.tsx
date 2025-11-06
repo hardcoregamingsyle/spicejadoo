@@ -1,6 +1,6 @@
 import React from 'react';
 import { Spice, FlavorProfile } from './types';
-
+import { Challenge } from "./types";
 // === SVG ICONS ===
 const ChiliIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -91,5 +91,54 @@ export const SPICES: Spice[] = [
     description: 'Adds a tangy, sweet-sour kick to dishes.',
     icon: TamarindIcon,
     flavorProfile: { ...EMPTY_PROFILE, Sourness: 30, Sweetness: 5 },
+  },
+];
+
+
+export const challenges: Challenge[] = [
+  {
+    id: 1,
+    region: "South India",
+    title: "Fiery Curry Base",
+    description: "Create a curry blend that packs heat but stays balanced.",
+    base: "Tomato & Onion",
+    targetProfile: {
+      Heat: 8,
+      Sweetness: 2,
+      Sourness: 3,
+      Umami: 6,
+      Bitterness: 2,
+      Aromatic: 5,
+    },
+  },
+  {
+    id: 2,
+    region: "North India",
+    title: "Rich Butter Masala",
+    description: "Blend spices to enhance a creamy butter gravy base.",
+    base: "Cream & Tomato",
+    targetProfile: {
+      Heat: 4,
+      Sweetness: 6,
+      Sourness: 2,
+      Umami: 7,
+      Bitterness: 1,
+      Aromatic: 8,
+    },
+  },
+  {
+    id: 3,
+    region: "Coastal India",
+    title: "Tangy Seafood Masala",
+    description: "Bring out the tang and aroma of a coastal seafood dish.",
+    base: "Coconut & Tamarind",
+    targetProfile: {
+      Heat: 5,
+      Sweetness: 3,
+      Sourness: 8,
+      Umami: 6,
+      Bitterness: 2,
+      Aromatic: 7,
+    },
   },
 ];
